@@ -6,6 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     d:DesignHeight="300"
     d:DesignWidth="300"
+    Loaded="NumericUpDown_Loaded"
     mc:Ignorable="d">
     <Grid>
         <Grid.ColumnDefinitions>
@@ -31,7 +32,7 @@
             MouseWheel="TxtBox_MouseWheel"
             PreviewKeyDown="TxtBox_PreviewKeyDown"
             PreviewTextInput="TxtBox_PreviewTextInput"
-            Text="{Binding FallbackValue, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Mode=TwoWay}"
+            Text="{Binding Value, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Mode=TwoWay}"
             TextChanged="TxtBox_TextChanged" />
         <Button
             x:Name="upArrow"

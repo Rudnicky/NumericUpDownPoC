@@ -278,6 +278,11 @@ namespace NumericUpDownPoC
                 }
             }
         }
+
+        private void NumericUpDown_Loaded(object sender, RoutedEventArgs e)
+        {
+            txtBox.Text = Value.ToString();
+        }
         #endregion
 
         #region Methods Private
@@ -393,14 +398,6 @@ namespace NumericUpDownPoC
             {
                 return str.Insert(0, "0");
             }
-            //else if (str.Length > 1 && (str[0] != ',') || (str[0] != ','))
-            //{
-            //    char lastCharacter = str[str.Length - 1];
-            //    if (lastCharacter == ',' || lastCharacter == '.')
-            //    {
-            //        return str.Remove(str.Length - 1);
-            //    }
-            //}
             return str;
         }
         #endregion
