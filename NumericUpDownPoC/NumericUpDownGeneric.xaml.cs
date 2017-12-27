@@ -1,6 +1,5 @@
 ﻿using System;
 using System.ComponentModel;
-using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
@@ -13,14 +12,12 @@ namespace NumericUpDownPoC
     /// </summary>
     public partial class NumericUpDownGeneric : UserControl, INotifyPropertyChanged
     {
-        #region Constant Properties
+        #region Const Properties
         private const string DefaultValue = "0";
         private const string NotAvailable = "N/A";
         #endregion
 
         #region Dependency Properties
-        private char _sign;
-
         public decimal Value
         {
             get
@@ -116,7 +113,6 @@ namespace NumericUpDownPoC
         public NumericUpDownGeneric()
         {
             InitializeComponent();
-            _sign = Convert.ToChar(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
         }
         #endregion
 
@@ -130,7 +126,6 @@ namespace NumericUpDownPoC
             }
             catch (Exception)
             {
-
                 throw;
             }
         }
@@ -196,15 +191,33 @@ namespace NumericUpDownPoC
 
         private void TxtBox_MouseWheel(object sender, MouseWheelEventArgs e)
         {
+            // when focusing with empty txtbox value set zero
+            // for the proper mousewheel event job.
+            // If not we've got a formatexception
             try
             {
+                if (txtBox.Text.ToString() == string.Empty)
+                {
+                    txtBox.Text = "0";
+                }
+
                 Value = Convert.ToDecimal(txtBox.Text.ToString());
                 if (e.Delta > 0)
+                {
                     Value += StepValue;
+                    txtBox.Text = Value.ToString();
+                }
                 else if (e.Delta < 0)
+                {
                     Value -= StepValue;
+                    txtBox.Text = Value.ToString();
+                }
             }
-            catch (Exception ex)
+            catch (FormatException formatException)
+            {
+                
+            }
+            catch (Exception exception)
             {
 
             }
@@ -214,7 +227,7 @@ namespace NumericUpDownPoC
         {
             if (sender is TextBox textBox)
             {
-                if (textBox.Text == string.Empty || textBox.Text == "." || textBox.Text == "," || textBox.Text == "-1" || textBox.Text == "-")
+                if (IsValidOnLostFocus())
                 {
                     if (!IsNumericUpDownNA)
                     {
@@ -264,16 +277,16 @@ namespace NumericUpDownPoC
             txtBox = sender as TextBox;
             if (txtBox != null)
             {
-                var newTextValue = txtBox.Text;
-                if (newTextValue != NotAvailable)
+                txtBox.Text = ValidateMinusInside(txtBox.Text);
+                if (txtBox.Text != NotAvailable)
                 {
-                    if (newTextValue.Contains(NotAvailable))
+                    if (txtBox.Text.Contains(NotAvailable))
                     {
-                        GeneralValidation(RemoveDuplicate(newTextValue));
+                        GeneralValidation(RemoveDuplicate(txtBox.Text));
                     }
                     else
                     {
-                        GeneralValidation(newTextValue);
+                        GeneralValidation(txtBox.Text);
                     }
                 }
             }
@@ -281,11 +294,36 @@ namespace NumericUpDownPoC
 
         private void NumericUpDown_Loaded(object sender, RoutedEventArgs e)
         {
-            txtBox.Text = Value.ToString();
+            if (!IsNumericUpDownNA)
+            {
+                txtBox.Text = Value.ToString();
+            }
+            else
+            {
+                var tmp = Value.ToString();
+                if (tmp == "0" || tmp == "-1")
+                {
+                    txtBox.Text = NotAvailable;
+                }
+            }
         }
         #endregion
 
         #region Methods Private
+        private string ValidateMinusInside(string str)
+        {
+            // function to determine and fix if user
+            // has entered minus inside some value
+            // for example 0.-2 to -0.2 [str]
+            const string Minus = "-";
+            if (str.Contains(Minus) && str.IndexOf(Minus) > 0)
+            {
+                var replaceMinus = str.Replace(Minus, string.Empty);
+                return replaceMinus.Insert(0, Minus);
+            }
+            return str;
+        }
+
         private void GeneralValidation(string str)
         {
             if (str.Contains(","))
@@ -328,25 +366,34 @@ namespace NumericUpDownPoC
 
         private bool IsNumeric(string text)
         {
+            // try.Parse's not working as expected
+            // it can be used only in Copy/Paste example
+            // that's why we're using Regex here
             return Regex.IsMatch(text, "[^0-9.,-]+");
         }
 
         private bool IsValueValid(string str)
         {
-            if (str.Length > 0 && str[0] == '-')
+            const char Minus = '-';
+
+            // determine string for minuses
+            if (str.Length > 0 && str[0] == Minus)
             {
-                if (str.Length == 1 && str[0] == '-')
+                if (str.Length == 1 && str[0] == Minus)
                 {
                     return false;
                 }
 
-                if (HasDuplicate(str, '-'))
+                if (HasDuplicate(str, Minus))
                 {
                     txtBox.Text = string.Empty;
                     return false;
                 }
             }
 
+            // If string contains duplicate of dots or commas
+            // then function should set textbox text property
+            // to string.Empty value
             if (HasDuplicate(str, '.') || HasDuplicate(str, ','))
             {
                 txtBox.Text = string.Empty;
@@ -359,6 +406,23 @@ namespace NumericUpDownPoC
             }
 
             return true;
+        }
+
+        private bool IsValidOnLostFocus()
+        {
+            // determine whetever numeric's n/a or default
+            // if default then check logic for -1 value
+            if (IsNumericUpDownNA)
+            {
+                return txtBox.Text == string.Empty || txtBox.Text == "."
+                    || txtBox.Text == "," || txtBox.Text == "-1"
+                    || txtBox.Text == "-" || txtBox.Text == "0";
+            }
+            else
+            {
+                return txtBox.Text == string.Empty || txtBox.Text == "."
+                    || txtBox.Text == "," || txtBox.Text == "-" || txtBox.Text == "0";
+            }
         }
 
         private bool HasDuplicate(string text, char sign)
