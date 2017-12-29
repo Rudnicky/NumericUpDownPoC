@@ -1,8 +1,10 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 
 namespace NumericUpDownPoC
@@ -39,7 +41,6 @@ namespace NumericUpDownPoC
                 else if (value < Minimum)
                 {
                     SetValue(ValueProperty, Minimum);
-
                     OnPropertyChanged("Value");
                 }
             }
@@ -53,7 +54,6 @@ namespace NumericUpDownPoC
             get { return (decimal)GetValue(MaximumProperty); }
             set { SetValue(MaximumProperty, value); }
         }
-
         public static readonly DependencyProperty MaximumProperty =
             DependencyProperty.Register("Maximum",
                 typeof(decimal),
@@ -65,7 +65,6 @@ namespace NumericUpDownPoC
             get { return (decimal)GetValue(MinimumProperty); }
             set { SetValue(MinimumProperty, value); }
         }
-
         public static readonly DependencyProperty MinimumProperty =
             DependencyProperty.Register("Minimum",
                 typeof(decimal),
@@ -77,7 +76,6 @@ namespace NumericUpDownPoC
             get { return (decimal)GetValue(StepValueProperty); }
             set { SetValue(StepValueProperty, value); }
         }
-
         public static readonly DependencyProperty StepValueProperty =
             DependencyProperty.Register("StepValue",
                 typeof(decimal),
@@ -89,7 +87,6 @@ namespace NumericUpDownPoC
             get { return (int)GetValue(PrecisionProperty); }
             set { SetValue(PrecisionProperty, value); }
         }
-
         public static readonly DependencyProperty PrecisionProperty =
             DependencyProperty.Register("Precision",
                 typeof(int),
@@ -101,18 +98,29 @@ namespace NumericUpDownPoC
             get { return (bool)GetValue(IsNumericUpDownNAProperty); }
             set { SetValue(IsNumericUpDownNAProperty, value); }
         }
-
         public static readonly DependencyProperty IsNumericUpDownNAProperty =
             DependencyProperty.Register("IsNumericUpDownNA",
                 typeof(bool),
                 typeof(NumericUpDownGeneric),
-                new PropertyMetadata(false));
+                new PropertyMetadata((false), new PropertyChangedCallback(NumericUpDownNAChanged)));
+
+        public bool IsPercentageModeOn
+        {
+            get { return (bool)GetValue(IsPercentageModeOnProperty); }
+            set { SetValue(IsPercentageModeOnProperty, value); }
+        }
+        public static readonly DependencyProperty IsPercentageModeOnProperty =
+            DependencyProperty.Register("IsPercentageModeOn",
+                typeof(bool),
+                typeof(NumericUpDownGeneric),
+                new PropertyMetadata((false), new PropertyChangedCallback(NumericUpDownPercentageChanged)));
         #endregion
 
         #region Constructor
         public NumericUpDownGeneric()
         {
             InitializeComponent();
+            Grid.DataContext = this;
         }
         #endregion
 
@@ -122,7 +130,6 @@ namespace NumericUpDownPoC
             try
             {
                 this.Value += StepValue;
-                this.txtBox.Text = Value.ToString();
             }
             catch (Exception)
             {
@@ -135,7 +142,6 @@ namespace NumericUpDownPoC
             try
             {
                 this.Value -= StepValue;
-                this.txtBox.Text = Value.ToString();
             }
             catch (Exception)
             {
@@ -154,7 +160,7 @@ namespace NumericUpDownPoC
                     isPastedTextValid = true;
             }
 
-            if (!isPastedTextValid)
+            if (!isPastedTextValid) 
                 e.CancelCommand();
         }
 
@@ -205,12 +211,12 @@ namespace NumericUpDownPoC
                 if (e.Delta > 0)
                 {
                     Value += StepValue;
-                    txtBox.Text = Value.ToString();
+                    //txtBox.Text = Value.ToString();
                 }
                 else if (e.Delta < 0)
                 {
                     Value -= StepValue;
-                    txtBox.Text = Value.ToString();
+                    //txtBox.Text = Value.ToString();
                 }
             }
             catch (FormatException formatException)
@@ -466,6 +472,77 @@ namespace NumericUpDownPoC
         }
         #endregion
 
+        #region DependencyProperty Callbacks
+        private static void NumericUpDownNAChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            // this dep method must be a static method
+            // in order to set binding with different kind of objects
+            // we have to set another non-static callback method
+            if (d is NumericUpDownGeneric numericUpDown)
+            {
+                numericUpDown.OnNumericUpDownNAChanged(e);
+            }
+        }
+
+        private void OnNumericUpDownNAChanged(DependencyPropertyChangedEventArgs e)
+        {
+            try
+            {
+                if (IsNumericUpDownNA)
+                {
+                    NotAvailableConverter converter = new NotAvailableConverter();
+                    Binding binding = new Binding
+                    {
+                        Source = this, // viewmodel of this class
+                        Path = new PropertyPath("Value"), // decimal dependency property
+                        Mode = BindingMode.TwoWay,
+                        Converter = converter, // setting up custom converter
+                        UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+                    };
+                    BindingOperations.SetBinding(txtBox, TextBox.TextProperty, binding);
+                }
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+
+        private static void NumericUpDownPercentageChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is NumericUpDownGeneric numericUpDown)
+            {
+                numericUpDown.OnNumericUpDownPercentageChanged(e);
+            }
+        }
+
+        private void OnNumericUpDownPercentageChanged(DependencyPropertyChangedEventArgs e)
+        {
+            try
+            {
+                if (IsPercentageModeOn)
+                {
+                    PercentageConverter converter = new PercentageConverter();
+                    Binding binding = new Binding
+                    {
+                        Source = this, // viewmodel of this class
+                        Path = new PropertyPath("Value"), // decimal dependency property
+                        Mode = BindingMode.TwoWay,
+                        Converter = converter, // setting up custom converter
+                        UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+                    };
+                    BindingOperations.SetBinding(txtBox, TextBox.TextProperty, binding);
+                }
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+        #endregion
+
         #region INotifyPropertyChanged
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -475,4 +552,50 @@ namespace NumericUpDownPoC
         }
         #endregion
     }
+
+    //[ValueConversion(typeof(decimal), typeof(string))]
+    //public class NotAvailableConverter : IValueConverter
+    //{
+    //    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    //    {
+    //        return value == null ? null : ((decimal)value).ToString();
+    //    }
+
+    //    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    //    {
+    //        if (decimal.TryParse(value as string, out decimal retValue))
+    //        {
+    //            return retValue;
+    //        }
+    //        return DependencyProperty.UnsetValue;
+    //    }
+    //}
+
+    //[ValueConversion(typeof(decimal), typeof(string))]
+    //public class PercentageConverter : IValueConverter
+    //{
+    //    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    //    {
+    //        return value == null ? null : ((decimal)value).ToString() + "%";
+    //    }
+
+    //    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    //    {
+    //        try
+    //        {
+    //            if (value.ToString().Contains("%"))
+    //            {
+    //                return decimal.Parse(value.ToString().Substring(0, value.ToString().Length - 1));
+    //            }
+    //            else
+    //            {
+    //                return value;
+    //            }
+    //        }
+    //        catch (Exception)
+    //        {
+    //            throw;
+    //        }
+    //    }
+    //}
 }
