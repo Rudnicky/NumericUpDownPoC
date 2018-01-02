@@ -3,13 +3,13 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:local="clr-namespace:NumericUpDownPoC"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    x:Name="NumericUpDownControl"
     d:DesignHeight="300"
     d:DesignWidth="300"
-    Loaded="NumericUpDown_Loaded"
+    Loaded="NumericUpDownControl_Loaded"
     mc:Ignorable="d">
-    <Grid x:Name="Grid">
+    <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="50" />
@@ -28,7 +28,6 @@
             VerticalContentAlignment="Center"
             DataObject.Pasting="TxtBox_Pasting"
             FontSize="20"
-            GotFocus="TxtBox_GotFocus"
             LostFocus="TxtBox_LostFocus"
             MouseWheel="TxtBox_MouseWheel"
             PreviewKeyDown="TxtBox_PreviewKeyDown"

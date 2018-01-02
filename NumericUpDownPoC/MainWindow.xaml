@@ -10,38 +10,39 @@
     Height="250"
     mc:Ignorable="d">
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
             <RowDefinition Height="*" />
             <RowDefinition Height="*" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <local:NumericUpDown
             Grid.Row="0"
-            DefaultValue="1"
-            IsPercentageModeOn="True"
-            Maximum="100"
-            Minimum="-100"
-            StepValue="1"
-            Value="{Binding Value, Mode=OneWay}" />
+            Width="200"
+            Height="50"
+            DefaultValue="6"
+            Maximum="10"
+            Minimum="-10"
+            Precision="4"
+            StepValue="1" />
         <local:NumericUpDown
             Grid.Row="1"
-            DefaultValue="1"
-            IsNumericUpDownNA="True"
-            Maximum="100"
-            Minimum="-100"
-            StepValue="1"
-            Value="{Binding Value, Mode=OneWay}" />
+            Width="200"
+            Height="50"
+            DefaultValue="6"
+            IsPercentageModeOn="True"
+            Maximum="10"
+            Minimum="-10"
+            Precision="4"
+            StepValue="1" />
         <local:NumericUpDown
             Grid.Row="2"
-            DefaultValue="2"
-            Maximum="100"
-            Minimum="-100"
-            Precision="2"
-            StepValue="0.5"
-            Value="{Binding Value, Mode=OneWay}" />
+            Width="200"
+            Height="50"
+            DefaultValue="6"
+            IsNumericUpDownNA="True"
+            Maximum="10"
+            Minimum="-10"
+            Precision="4"
+            StepValue="1" />
     </Grid>
 </Window>
