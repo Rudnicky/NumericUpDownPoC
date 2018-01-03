@@ -137,6 +137,7 @@ namespace NumericUpDownPoC
         #region Constructor
         public NumericUpDown()
         {
+            //ChangeCurrentCulture("pl-PL");
             InitializeComponent();
             SetupInvariantCulture();
 
@@ -147,17 +148,47 @@ namespace NumericUpDownPoC
         #region Events
         private void TxtBox_Pasting(object sender, DataObjectPastingEventArgs e)
         {
-            bool isPastedTextValid = false;
-
-            if (e.DataObject.GetDataPresent(typeof(string)))
+            try
             {
-                var pasteText = e.DataObject.GetData(typeof(string)) as string;
-                if (IsNumeric(pasteText))
-                    isPastedTextValid = true;
-            }
+                bool isPastedTextValid = false;
 
-            if (!isPastedTextValid)
-                e.CancelCommand();
+                if (e.DataObject.GetDataPresent(typeof(string)))
+                {
+                    var pasteText = e.DataObject.GetData(typeof(string)) as string;
+                    if (IsNumeric(pasteText))
+                    {
+                        isPastedTextValid = true;
+
+                        var str = txtBox.Text + pasteText;
+                        var tmp = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
+                        if (tmp > Maximum)
+                        {
+                            txtBox.Text = Maximum.ToString();
+                            txtBox.SelectionStart = str.Length + 1;
+                            txtBox.SelectionLength = 0;
+                            isPastedTextValid = false;
+                        }
+                        else if (tmp < Minimum)
+                        {
+                            txtBox.Text = Minimum.ToString();
+                            txtBox.SelectionStart = str.Length + 1;
+                            txtBox.SelectionLength = 0;
+                            isPastedTextValid = false;
+                        }
+                    }
+                }
+
+                if (!isPastedTextValid)
+                    e.CancelCommand();
+            }
+            catch (FormatException)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                throw;
+            }
         }
 
         private void TxtBox_LostFocus(object sender, RoutedEventArgs e)
@@ -171,31 +202,33 @@ namespace NumericUpDownPoC
                     if (string.IsNullOrEmpty(str))
                     {
                         this.Value = 0;
-                        txtBox.Text = Value.ToString();
                     }
                     else
                     {
-                        if (!Decimal.TryParse(str, NumberStyles.Any, _currentCulture, out Decimal value))
+                        if (!IsPercentageModeOn)
                         {
-                            this.Value = 0;
-                            txtBox.Text = Value.ToString();
-                        }
-                        else if (str.Length > 1)
-                        {
-                            if (str.Contains(",") && str.IndexOf(',') == str.Length - 1)
-                            {
-                                this.Value = Decimal.Parse(RemoveLast(str));
-                                txtBox.Text = Value.ToString();
-                            }
-                            else if (str.Contains(".") && str.IndexOf('.') == str.Length - 1)
-                            {
-                                this.Value = Decimal.Parse(RemoveLast(str));
-                                txtBox.Text = Value.ToString();
-                            }
-                            else if (str.Length == 2 && str[0] == '-' && str[1] == '0')
+                            if (!Decimal.TryParse(str, NumberStyles.Any, _currentCulture, out Decimal value))
                             {
                                 this.Value = 0;
-                                txtBox.Text = Value.ToString();
+                            }
+                            else if (str.Length > 1)
+                            {
+                                if (str.Contains(",") && str.IndexOf(',') == str.Length - 1)
+                                {
+                                    this.Value = Decimal.Parse(RemoveLast(str));
+                                }
+                                else if (str.Contains(".") && str.IndexOf('.') == str.Length - 1)
+                                {
+                                    this.Value = Decimal.Parse(RemoveLast(str));
+                                }
+                                else if (str.Length == 2 && str[0] == '-' && str[1] == '0')
+                                {
+                                    this.Value = 0;
+                                }
+                                else if (str.Contains(","))
+                                {
+                                    this.Value = Convert.ToDecimal(str.Replace(Comma, Dot), CultureInfo.InvariantCulture);
+                                }
                             }
                         }
                     }
@@ -218,12 +251,10 @@ namespace NumericUpDownPoC
                 if (e.Delta > 0)
                 {
                     Value += StepValue;
-                    txtBox.Text = Value.ToString();
                 }
                 else if (e.Delta < 0)
                 {
                     Value -= StepValue;
-                    txtBox.Text = Value.ToString();
                 }
             }
             catch (Exception)
@@ -233,7 +264,7 @@ namespace NumericUpDownPoC
         }
 
         private void TxtBox_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
+       {
             if (e.Key == Key.Space || e.Key == Key.OemPlus)
             {
                 e.Handled = true;
@@ -247,29 +278,11 @@ namespace NumericUpDownPoC
                 }
             }
 
-            //if (e.Key == Key.Delete || e.Key == Key.Back)
-            //{
-            //    try
-            //    {
-            //        //var str = txtBox.Text;
-            //        //if (!string.IsNullOrEmpty(str) && str.Length == 1)
-            //        //{
-            //        //    this.Value = 0;
-            //        //    txtBox.Text = "0";
-            //        //}
-            //    }
-            //    catch (Exception)
-            //    {
-            //        throw;
-            //    }
-            //}
-
             if (e.Key == Key.Up)
             {
                 try
                 {
                     this.Value += StepValue;
-                    txtBox.Text = Value.ToString();
                 }
                 catch (Exception)
                 {
@@ -295,8 +308,17 @@ namespace NumericUpDownPoC
             var txtBox = (TextBox)sender;       
             if (txtBox != null)
             {
-                var caretIndex = txtBox.CaretIndex;     
-                var str = txtBox.Text.Insert(caretIndex, e.Text);
+                var caretIndex = txtBox.CaretIndex;
+                var str = txtBox.Text + e.Text;
+                bool percentMode = false;
+
+                // check if user has entered anything after 
+                // percent, is yes then remove percent char.
+                if (str.Contains("%") && str.IndexOf('%') != str.Length - 1)
+                {
+                    str = RemoveBySign(str, '%');
+                    percentMode = true;
+                }
 
                 // check for NOR numbers.
                 if (IsNumericUpDownNA)
@@ -308,6 +330,7 @@ namespace NumericUpDownPoC
                         return;
                     }
                 }
+
                 if (IsValid(e.Text))
                 {
                     e.Handled = true;
@@ -341,13 +364,22 @@ namespace NumericUpDownPoC
                     return;
                 }
 
-                // if minus is on first place move 
-                // carret at the right side of a sign.
-                if (str == Minus)
+                if (HasDuplicate(str, '-'))
                 {
-                    txtBox.CaretIndex = txtBox.Text.Length;
+                    if (str.Length != 2)
+                    {
+                        txtBox.Text = RemoveDuplicate(str, '-');
+                        e.Handled = true;
+                        return;
+                    }
+                    else
+                    {
+                        txtBox.Text = RemoveLast(str);
+                        e.Handled = true;
+                        return;
+                    }
                 }
-                
+
                 // check for possible duplicates.
                 if (HasDuplicate(str, '.'))
                 {
@@ -372,6 +404,45 @@ namespace NumericUpDownPoC
                     }
                 }
 
+                // if minus is on first place move 
+                // carret at the right side of a sign.
+                if (str.Length >= 1 && str[0] == '-')
+                {
+                    txtBox.Text = str;
+                    txtBox.CaretIndex = str.Length;
+                    e.Handled = true;
+                }
+
+                // additional validation to prevent
+                // values like '-6%b' etc.
+                if (percentMode && str != Minus)
+                {
+                    var tmp = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
+                    if (tmp > Maximum)
+                    {
+                        txtBox.Text = Maximum.ToString();
+                        txtBox.SelectionStart = str.Length + 1;
+                        txtBox.SelectionLength = 0;
+                        Value = Maximum;
+                        return;
+                    }
+                    else if (tmp < Minimum)
+                    {
+                        txtBox.Text = Minimum.ToString();
+                        txtBox.SelectionStart = str.Length + 1;
+                        txtBox.SelectionLength = 0;
+                        Value = Minimum;
+                        return;
+                    }
+                    else
+                    {
+                        Value = tmp;
+                    }
+                    
+                    percentMode = false;
+                    e.Handled = true;
+                }
+
                 // Determine if current culture 
                 // separator is dot or comma and then
                 // switch those separators if needed.
@@ -379,17 +450,37 @@ namespace NumericUpDownPoC
                 {
                     if (IsDotCurrentCulture() && e.Text == Comma)
                     {
-                        txtBox.Text = txtBox.Text + Dot;
-                        txtBox.CaretIndex = txtBox.Text.Length;
-                        e.Handled = true;
-                        return;
+                        if (txtBox.Text.Contains(Comma))
+                        {
+                            txtBox.Text = txtBox.Text.Replace(Comma, Dot);
+                            txtBox.CaretIndex = txtBox.Text.Length;
+                            e.Handled = true;
+                            return;
+                        }
+                        else
+                        {
+                            txtBox.Text = txtBox.Text + Dot;
+                            txtBox.CaretIndex = txtBox.Text.Length;
+                            e.Handled = true;
+                            return;
+                        }
                     }
                     else if (!IsDotCurrentCulture() && e.Text == Dot)
                     {
-                        txtBox.Text = txtBox.Text + Comma;
-                        txtBox.CaretIndex = txtBox.Text.Length;
-                        e.Handled = true;
-                        return;
+                        if (txtBox.Text.Contains(Dot))
+                        {
+                            txtBox.Text = txtBox.Text.Replace(Dot, Comma);
+                            txtBox.CaretIndex = txtBox.Text.Length;
+                            e.Handled = true;
+                            return;
+                        }
+                        else
+                        {
+                            txtBox.Text = txtBox.Text + Comma;
+                            txtBox.CaretIndex = txtBox.Text.Length;
+                            e.Handled = true;
+                            return;
+                        }
                     }
                     else if (str.Length > 1 && str[0] == ',' || str[0] == '.')
                     {
@@ -439,24 +530,10 @@ namespace NumericUpDownPoC
                 // special condition for checking
                 // if user tried to entered a number
                 // like '-0X' and to prevent it.
-                if (str.Length == 3 && str[0] == '-' && str[1] == '0')
+                if (str.Length == 3 && str[2] != ',' && str[2] != '.' && str[0] == '-' && str[1] == '0')
                 {
                     txtBox.Text = RemoveLast(str);
                     e.Handled = true;
-                }
-
-                if (HasDuplicate(str, '-'))
-                {
-                    if (str.Length != 2)
-                    {
-                        txtBox.Text = RemoveDuplicate(str, '-');
-                        e.Handled = true;
-                    }
-                    else
-                    {
-                        txtBox.Text = RemoveLast(str);
-                        e.Handled = true;
-                    }
                 }
 
                 // check for precision correctness,
@@ -466,14 +543,14 @@ namespace NumericUpDownPoC
                 {
                     txtBox.Text = RemoveLast(str);
                     e.Handled = true;
+                    return;
                 }
 
-                // check if minus is on last position
-                // if so, then insert it to the front.
-                if (str.Length > 1 && IsMinusLast(str))
+                // check if minus is on first position
+                // if it's not, then insert it to the front.
+                if (str.Length > 1 && str[0] == '-')
                 {
-                    var tmp = MoveLastToFirst(str);
-                    txtBox.Text = tmp;
+                    txtBox.Text = str;
 
                     // check for special condition when
                     // user has entered '0' and then minus
@@ -482,13 +559,13 @@ namespace NumericUpDownPoC
                     // in math, so what we do i that we're about to
                     // add a separator just after '-0' value to let user
                     // enter after decimal point like '-0.X'
-                    if (Precision > 1)
+                    if (Precision >= 1)
                     {
-                        if (tmp.Length == 2)
+                        if (str.Length == 2)
                         {
-                            if (tmp[0] == '-' && tmp[1] == '0')
+                            if (str[0] == '-' && str[1] == '0')
                             {
-                                txtBox.Text = tmp + _currentCultureSeparator; // separator
+                                txtBox.Text = str + _currentCultureSeparator; // separator
                                 txtBox.CaretIndex = txtBox.Text.Length;
                                 e.Handled = true;
                                 return;
@@ -505,13 +582,6 @@ namespace NumericUpDownPoC
                 {
                     txtBox.Text = MoveCharToFirst(str, Minus);
                     e.Handled = true;
-                }
-
-                // check if user has entered anything after 
-                // percent, is yes then remove last char.
-                if (str.Contains("%") && str.IndexOf('%') != str.Length - 1)
-                {
-                    txtBox.Text = RemoveLast(str);
                 }
             }
         }
@@ -537,35 +607,32 @@ namespace NumericUpDownPoC
                             str = RemoveLast(str);
                         }
 
-                        if (str.Length > 1 && (str.IndexOf('.') != str.Length - 1 || str.IndexOf(',') != str.Length - 1))
+                        if (str.Contains(Comma))
                         {
-                            if (str.IndexOf('.') == str.Length-2 || str.IndexOf(',') == str.Length-2)
-                            {
-                                if (str.Contains(Comma))
-                                {
-                                    // in order to proper decimal conversion
-                                    str = str.Replace(Comma, Dot);
-                                }
+                            // in order to proper decimal conversion
+                            str = str.Replace(Comma, Dot);
+                        }
 
-                                var tmp = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
-                                if (tmp > Maximum)
-                                {
-                                    txtBox.Text = Maximum.ToString();
-                                    txtBox.SelectionStart = str.Length + 1;
-                                    txtBox.SelectionLength = 0;
-                                    Value = Maximum;
-                                }
-                                else if (tmp < Minimum)
-                                {
-                                    txtBox.Text = Minimum.ToString();
-                                    txtBox.SelectionStart = str.Length + 1;
-                                    txtBox.SelectionLength = 0;
-                                    Value = Minimum;
-                                }
-                                else
-                                {
-                                    Value = tmp;
-                                }
+                        if (str.Length > 1 && str.IndexOf('.') != str.Length - 1)
+                        {
+                            var tmp = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
+                            if (tmp > Maximum)
+                            {
+                                txtBox.Text = Maximum.ToString();
+                                txtBox.SelectionStart = str.Length + 1;
+                                txtBox.SelectionLength = 0;
+                                Value = Maximum;
+                            }
+                            else if (tmp < Minimum)
+                            {
+                                txtBox.Text = Minimum.ToString();
+                                txtBox.SelectionStart = str.Length + 1;
+                                txtBox.SelectionLength = 0;
+                                Value = Minimum;
+                            }
+                            else
+                            {
+                                Value = tmp;
                             }
                         }
                     }
@@ -587,14 +654,7 @@ namespace NumericUpDownPoC
         {
             try
             {
-                // txtBox.Text = Value.ToString(); is against
-                // binding itselfes yet it is needed because of 
-                // different decimal cultures. Decimal
-                // as a value gets only dot. If we want to 
-                // be able to display comma besides dots,
-                // then that's the only way to do that.
                 this.Value += StepValue;
-                txtBox.Text = Value.ToString();
             }
             catch (Exception)
             {
@@ -607,7 +667,6 @@ namespace NumericUpDownPoC
             try
             {
                 this.Value -= StepValue;
-                txtBox.Text = Value.ToString();
             }
             catch (Exception)
             {
@@ -755,7 +814,6 @@ namespace NumericUpDownPoC
                     }
                 }
             }
-
             return true;
         }
 
@@ -968,7 +1026,37 @@ namespace NumericUpDownPoC
                     return retValue.Remove(retValue.IndexOf('%'), 1);
                 }
             }
-            return value.ToString();
+            return value;
+        }
+    }
+
+    [ValueConversion(typeof(decimal), typeof(string))]
+    public class DecimalPointConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            var retValue = value.ToString();
+            if (!string.IsNullOrEmpty(retValue))
+            {
+                if (retValue.Contains("."))
+                {
+                    return ((decimal)value).ToString().Replace(".", ",");
+                }
+            }
+            return ((decimal)value).ToString();
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            var retValue = value.ToString();
+            if (!string.IsNullOrEmpty(retValue))
+            {
+                if (retValue.Contains(","))
+                {
+                    return retValue.Replace(",", ".");
+                }
+            }
+            return value;
         }
     }
     #endregion
