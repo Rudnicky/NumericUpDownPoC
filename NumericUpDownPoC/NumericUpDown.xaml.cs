@@ -178,12 +178,25 @@ namespace NumericUpDownPoC
                             inputText = inputText.Remove(inputText.IndexOf('%'), 1);
                         }
 
+                        // this operation's needed for the proper
+                        // TryParse functionality method
+                        if (_currentCultureSeparator == ',')
+                        {
+                            inputText = inputText.Replace(".", ",");
+                        }
+
                         if (!decimal.TryParse(inputText, NumberStyles.Any, _currentCulture, out decimal result))
                         {
                             isPastedTextValid = false;
                         }
                         else
                         {
+                            // ToDecimal must always have
+                            // separator point as a dot
+                            if (inputText.Contains(Comma))
+                            {
+                                inputText = inputText.Replace(Comma, Dot);
+                            }
                             var tmp = Convert.ToDecimal(inputText, CultureInfo.InvariantCulture);
                             if (tmp > Maximum)
                             {
