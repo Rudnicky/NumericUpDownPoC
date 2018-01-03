@@ -8,6 +8,9 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 
+// try to change decimal parse 
+// and add converter of dots and commas
+
 namespace NumericUpDownPoC
 {
     /// <summary>
@@ -16,7 +19,8 @@ namespace NumericUpDownPoC
     public partial class NumericUpDown : UserControl, INotifyPropertyChanged
     {
         #region Properties
-        private char _cultureInfo;
+        private char _currentCultureSeparator;
+        private CultureInfo _currentCulture;
         private const string Dot = ".";
         private const string Comma = ",";
         private const string Minus = "-";
@@ -33,7 +37,7 @@ namespace NumericUpDownPoC
             {
                 if (value <= Maximum && value >= Minimum)
                 {
-                    SetValue(ValueProperty, Math.Round(value, Precision));
+                    SetValue(ValueProperty, value);
                     OnPropertyChanged("Value");
                 }
                 else if (value > Maximum)
@@ -105,7 +109,7 @@ namespace NumericUpDownPoC
             DependencyProperty.Register("Precision",
                 typeof(int),
                 typeof(NumericUpDown),
-                new PropertyMetadata(1));
+                new PropertyMetadata(0));
 
         public bool IsNumericUpDownNA
         {
@@ -169,6 +173,32 @@ namespace NumericUpDownPoC
                         this.Value = 0;
                         txtBox.Text = Value.ToString();
                     }
+                    else
+                    {
+                        if (!Decimal.TryParse(str, NumberStyles.Any, _currentCulture, out Decimal value))
+                        {
+                            this.Value = 0;
+                            txtBox.Text = Value.ToString();
+                        }
+                        else if (str.Length > 1)
+                        {
+                            if (str.Contains(",") && str.IndexOf(',') == str.Length - 1)
+                            {
+                                this.Value = Decimal.Parse(RemoveLast(str));
+                                txtBox.Text = Value.ToString();
+                            }
+                            else if (str.Contains(".") && str.IndexOf('.') == str.Length - 1)
+                            {
+                                this.Value = Decimal.Parse(RemoveLast(str));
+                                txtBox.Text = Value.ToString();
+                            }
+                            else if (str.Length == 2 && str[0] == '-' && str[1] == '0')
+                            {
+                                this.Value = 0;
+                                txtBox.Text = Value.ToString();
+                            }
+                        }
+                    }
                 }
             }
             catch (FormatException)
@@ -188,10 +218,12 @@ namespace NumericUpDownPoC
                 if (e.Delta > 0)
                 {
                     Value += StepValue;
+                    txtBox.Text = Value.ToString();
                 }
                 else if (e.Delta < 0)
                 {
                     Value -= StepValue;
+                    txtBox.Text = Value.ToString();
                 }
             }
             catch (Exception)
@@ -207,7 +239,7 @@ namespace NumericUpDownPoC
                 e.Handled = true;
             }
 
-            if (Precision <= 1 || IsPercentageModeOn)
+            if (Precision < 1 || IsPercentageModeOn)
             {
                 if (e.Key == Key.OemComma || e.Key == Key.OemPeriod)
                 {
@@ -215,24 +247,29 @@ namespace NumericUpDownPoC
                 }
             }
 
-            if (e.Key == Key.Delete || e.Key == Key.Back)
-            {
-                try
-                {
-                    this.Value = 0;
-                    e.Handled = true;
-                }
-                catch (Exception)
-                {
-                    throw;
-                }
-            }
+            //if (e.Key == Key.Delete || e.Key == Key.Back)
+            //{
+            //    try
+            //    {
+            //        //var str = txtBox.Text;
+            //        //if (!string.IsNullOrEmpty(str) && str.Length == 1)
+            //        //{
+            //        //    this.Value = 0;
+            //        //    txtBox.Text = "0";
+            //        //}
+            //    }
+            //    catch (Exception)
+            //    {
+            //        throw;
+            //    }
+            //}
 
             if (e.Key == Key.Up)
             {
                 try
                 {
                     this.Value += StepValue;
+                    txtBox.Text = Value.ToString();
                 }
                 catch (Exception)
                 {
@@ -244,6 +281,7 @@ namespace NumericUpDownPoC
                 try
                 {
                     this.Value -= StepValue;
+                    txtBox.Text = Value.ToString();
                 }
                 catch (Exception)
                 {
@@ -254,10 +292,10 @@ namespace NumericUpDownPoC
 
         private void TxtBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {
-            var txtBox = (TextBox)sender;
+            var txtBox = (TextBox)sender;       
             if (txtBox != null)
             {
-                var caretIndex = txtBox.CaretIndex;
+                var caretIndex = txtBox.CaretIndex;     
                 var str = txtBox.Text.Insert(caretIndex, e.Text);
 
                 // check for NOR numbers.
@@ -273,43 +311,141 @@ namespace NumericUpDownPoC
                 if (IsValid(e.Text))
                 {
                     e.Handled = true;
+                    return;
                 }
 
                 // check if switched comma and dot are 
                 // in right order. The key is to prevent
                 // situation like "1.," in code.
-                else if (!IsCommaQueueInRightOrder(str))
+                if (!IsCommaQueueInRightOrder(str))
                 {
                     if (e.Text == Dot)
                     {
                         txtBox.Text = RemoveBySign(str, '.');
                         e.Handled = true;
+                        return;
                     }
                     else if (e.Text == Comma)
                     {
                         txtBox.Text = RemoveBySign(str, ',');
                         e.Handled = true;
+                        return;
                     }
                 }
+
                 // return if first char is dot or comma.
-                else if (txtBox.Text == string.Empty && (e.Text == Comma || e.Text == Dot))
+                if (txtBox.Text == string.Empty && (e.Text == Comma || e.Text == Dot))
                 {
                     txtBox.Text = string.Empty;
                     e.Handled = true;
                     return;
                 }
+
+                // if minus is on first place move 
+                // carret at the right side of a sign.
+                if (str == Minus)
+                {
+                    txtBox.CaretIndex = txtBox.Text.Length;
+                }
+                
                 // check for possible duplicates.
-                else if (HasDuplicate(str, '.'))
+                if (HasDuplicate(str, '.'))
                 {
                     txtBox.Text = RemoveDuplicate(str, '.');
                     e.Handled = true;
+                    return;
                 }
-                else if (HasDuplicate(str, ','))
+
+                if (HasDuplicate(str, ','))
                 {
-                    txtBox.Text = RemoveDuplicate(str, ',');
+                    if (str[0] == ',')
+                    {
+                        txtBox.Text = str.Remove(0, 1);
+                        e.Handled = true;
+                        return;
+                    }
+                    else
+                    {
+                        txtBox.Text = RemoveDuplicate(str, ',');
+                        e.Handled = true;
+                        return;
+                    }
+                }
+
+                // Determine if current culture 
+                // separator is dot or comma and then
+                // switch those separators if needed.
+                if (e.Text == Comma || e.Text == Dot)
+                {
+                    if (IsDotCurrentCulture() && e.Text == Comma)
+                    {
+                        txtBox.Text = txtBox.Text + Dot;
+                        txtBox.CaretIndex = txtBox.Text.Length;
+                        e.Handled = true;
+                        return;
+                    }
+                    else if (!IsDotCurrentCulture() && e.Text == Dot)
+                    {
+                        txtBox.Text = txtBox.Text + Comma;
+                        txtBox.CaretIndex = txtBox.Text.Length;
+                        e.Handled = true;
+                        return;
+                    }
+                    else if (str.Length > 1 && str[0] == ',' || str[0] == '.')
+                    {
+                        txtBox.Text = str.Remove(0, 1) + str[0].ToString();
+                        txtBox.CaretIndex = str.Length;
+                        e.Handled = true;
+                        return;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(str) && str.Length == 2)
+                {
+                    if (str[1] == ',' || str[1] == '.')
+                    {
+                        txtBox.Text = str;
+                        txtBox.CaretIndex = txtBox.Text.Length;
+                        e.Handled = true;
+                    }
+                    
+                    if (str[1] == '0' && Precision < 1)
+                    {
+                        txtBox.Text = RemoveLast(str);
+                        e.Handled = true;
+                        return;
+                    }
+                }
+
+                // prevent situation like letting user
+                // entering a number which is not a number
+                // like '0X'. If it's with decimal point
+                // then it's alright to let the user 
+                // input dot or comma.
+                if (str.Length > 1 && str[0] == '0')
+                {
+                    if (str[1] != ',' && str[1] != '.')
+                    {
+                        txtBox.Text = RemoveLast(str);
+                        e.Handled = true;
+                    }
+                    else if (Precision < 1 && e.Text == Minus)
+                    {
+                        txtBox.Text = str.Remove(0, 1);
+                        e.Handled = true;
+                    }
+                }
+
+                // special condition for checking
+                // if user tried to entered a number
+                // like '-0X' and to prevent it.
+                if (str.Length == 3 && str[0] == '-' && str[1] == '0')
+                {
+                    txtBox.Text = RemoveLast(str);
                     e.Handled = true;
                 }
-                else if (HasDuplicate(str, '-'))
+
+                if (HasDuplicate(str, '-'))
                 {
                     if (str.Length != 2)
                     {
@@ -322,50 +458,58 @@ namespace NumericUpDownPoC
                         e.Handled = true;
                     }
                 }
-                // Determine if current culture 
-                // separator is dot or comma and then
-                // switch those separators if needed.
-                else if (e.Text == Comma || e.Text == Dot)
-                {
-                    if (IsDotCurrentCulture() && e.Text == Comma)
-                    {
-                        txtBox.Text = txtBox.Text + Dot;
-                        txtBox.CaretIndex = txtBox.Text.Length;
-                        e.Handled = true;
-                    }
-                    else if (!IsDotCurrentCulture() && e.Text == Dot)
-                    {
-                        txtBox.Text = txtBox.Text + Comma;
-                        txtBox.CaretIndex = txtBox.Text.Length;
-                        e.Handled = true;
-                    }
-                }
+
                 // check for precision correctness,
                 // and forbid adding more digits
                 // then precision cap.
-                else if (!IsValidWithPrecision(str))
+                if (!IsValidWithPrecision(str))
                 {
                     txtBox.Text = RemoveLast(str);
                     e.Handled = true;
                 }
+
                 // check if minus is on last position
                 // if so, then insert it to the front.
-                else if (IsMinusLast(str))
+                if (str.Length > 1 && IsMinusLast(str))
                 {
-                    txtBox.Text = MoveLastToFirst(str);
+                    var tmp = MoveLastToFirst(str);
+                    txtBox.Text = tmp;
+
+                    // check for special condition when
+                    // user has entered '0' and then minus
+                    // if precision is greater then one, user should
+                    // be able to enter '-0' yet there's no such value
+                    // in math, so what we do i that we're about to
+                    // add a separator just after '-0' value to let user
+                    // enter after decimal point like '-0.X'
+                    if (Precision > 1)
+                    {
+                        if (tmp.Length == 2)
+                        {
+                            if (tmp[0] == '-' && tmp[1] == '0')
+                            {
+                                txtBox.Text = tmp + _currentCultureSeparator; // separator
+                                txtBox.CaretIndex = txtBox.Text.Length;
+                                e.Handled = true;
+                                return;
+                            }
+                        }
+                    }
                     e.Handled = true;
                 }
+
                 // check if minus is somewhere in
                 // the middle like "6-6" integer. If so
                 // then move it to the first position.
-                else if (str.Contains(Minus) && str.IndexOf('-') != 0)
+                if (str.Contains(Minus) && str.IndexOf('-') != 0)
                 {
                     txtBox.Text = MoveCharToFirst(str, Minus);
                     e.Handled = true;
                 }
+
                 // check if user has entered anything after 
                 // percent, is yes then remove last char.
-                else if (str.Contains("%") && str.IndexOf('%') != str.Length - 1)
+                if (str.Contains("%") && str.IndexOf('%') != str.Length - 1)
                 {
                     txtBox.Text = RemoveLast(str);
                 }
@@ -379,6 +523,13 @@ namespace NumericUpDownPoC
                 var str = txtBox.Text;
                 if (!string.IsNullOrEmpty(str))
                 {
+                    if (str[0] == ',' || str[0] == '.')
+                    {
+                        txtBox.Text = str.Remove(0, 1) + str[0].ToString();
+                        txtBox.CaretIndex = str.Length;
+                        return;
+                    }
+
                     if (!str.Equals("N/A"))
                     {
                         if (str.Contains("%") && str.Length > 0)
@@ -388,24 +539,33 @@ namespace NumericUpDownPoC
 
                         if (str.Length > 1 && (str.IndexOf('.') != str.Length - 1 || str.IndexOf(',') != str.Length - 1))
                         {
-                            var tmp = Convert.ToDecimal(str, new NumberFormatInfo() { NumberDecimalSeparator = _cultureInfo.ToString() });
-                            if (tmp > Maximum)
+                            if (str.IndexOf('.') == str.Length-2 || str.IndexOf(',') == str.Length-2)
                             {
-                                txtBox.Text = Maximum.ToString();
-                                txtBox.SelectionStart = str.Length + 1;
-                                txtBox.SelectionLength = 0;
-                                Value = Maximum;
-                            }
-                            else if (tmp < Minimum)
-                            {
-                                txtBox.Text = Minimum.ToString();
-                                txtBox.SelectionStart = str.Length + 1;
-                                txtBox.SelectionLength = 0;
-                                Value = Minimum;
-                            }
-                            else
-                            {
+                                if (str.Contains(Comma))
+                                {
+                                    // in order to proper decimal conversion
+                                    str = str.Replace(Comma, Dot);
+                                }
 
+                                var tmp = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
+                                if (tmp > Maximum)
+                                {
+                                    txtBox.Text = Maximum.ToString();
+                                    txtBox.SelectionStart = str.Length + 1;
+                                    txtBox.SelectionLength = 0;
+                                    Value = Maximum;
+                                }
+                                else if (tmp < Minimum)
+                                {
+                                    txtBox.Text = Minimum.ToString();
+                                    txtBox.SelectionStart = str.Length + 1;
+                                    txtBox.SelectionLength = 0;
+                                    Value = Minimum;
+                                }
+                                else
+                                {
+                                    Value = tmp;
+                                }
                             }
                         }
                     }
@@ -427,7 +587,14 @@ namespace NumericUpDownPoC
         {
             try
             {
+                // txtBox.Text = Value.ToString(); is against
+                // binding itselfes yet it is needed because of 
+                // different decimal cultures. Decimal
+                // as a value gets only dot. If we want to 
+                // be able to display comma besides dots,
+                // then that's the only way to do that.
                 this.Value += StepValue;
+                txtBox.Text = Value.ToString();
             }
             catch (Exception)
             {
@@ -440,6 +607,7 @@ namespace NumericUpDownPoC
             try
             {
                 this.Value -= StepValue;
+                txtBox.Text = Value.ToString();
             }
             catch (Exception)
             {
@@ -470,7 +638,8 @@ namespace NumericUpDownPoC
         {
             try
             {
-                _cultureInfo = Convert.ToChar(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
+                _currentCultureSeparator = Convert.ToChar(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
+                _currentCulture = CultureInfo.CurrentCulture;
             }
             catch (Exception)
             {
@@ -480,13 +649,13 @@ namespace NumericUpDownPoC
 
         private bool IsDotCurrentCulture()
         {
-            if (!char.IsWhiteSpace(_cultureInfo))
+            if (!char.IsWhiteSpace(_currentCultureSeparator))
             {
-                if (_cultureInfo == '.')
+                if (_currentCultureSeparator == '.')
                 {
                     return true;
                 }
-                else if (_cultureInfo == ',')
+                else if (_currentCultureSeparator == ',')
                 {
                     return false;
                 }
@@ -622,7 +791,7 @@ namespace NumericUpDownPoC
             // valid = ["123.12", "2", "56754", "92929292929292.12", "0.21", "3.1"]
             // invalid = ["12.1232", "2.23332", "e666.76"]
 
-            return Regex.IsMatch(text, @"^[0-9]+(\.[0-9]{1,2})?$");
+            return Regex.IsMatch(text, @"^[0-9]+(\.\,[0-9]{1,2})?$");
         }
 
         private bool IsValid(string text)

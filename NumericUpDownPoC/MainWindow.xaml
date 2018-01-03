@@ -22,7 +22,7 @@
             DefaultValue="6"
             Maximum="10"
             Minimum="-10"
-            Precision="4"
+            Precision="1"
             StepValue="1" />
         <local:NumericUpDown
             Grid.Row="1"

@@ -32,7 +32,7 @@
             MouseWheel="TxtBox_MouseWheel"
             PreviewKeyDown="TxtBox_PreviewKeyDown"
             PreviewTextInput="TxtBox_PreviewTextInput"
-            Text="{Binding Value, Mode=TwoWay}"
+            Text="{Binding Value, Mode=OneWay}"
             TextChanged="TxtBox_TextChanged" />
         <Button
             x:Name="upArrow"
