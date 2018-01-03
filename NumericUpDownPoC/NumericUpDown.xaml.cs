@@ -155,25 +155,50 @@ namespace NumericUpDownPoC
                 if (e.DataObject.GetDataPresent(typeof(string)))
                 {
                     var pasteText = e.DataObject.GetData(typeof(string)) as string;
-                    if (IsNumeric(pasteText))
+                    if (pasteText.Contains(Comma))
+                    {
+                        pasteText = pasteText.Replace(Comma, Dot);
+                    }
+
+                    if (IsNumericWithDot(pasteText))
                     {
                         isPastedTextValid = true;
 
-                        var str = txtBox.Text + pasteText;
-                        var tmp = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
-                        if (tmp > Maximum)
+                        var inputText = pasteText;
+                        var selectionStart = txtBox.SelectionStart;
+                        var selectionLength = txtBox.SelectionLength;
+                        
+                        if (!string.IsNullOrEmpty(txtBox.Text))
                         {
-                            txtBox.Text = Maximum.ToString();
-                            txtBox.SelectionStart = str.Length + 1;
-                            txtBox.SelectionLength = 0;
+                            inputText = txtBox.Text.Remove(selectionStart, selectionLength) + pasteText;
+                        }
+
+                        if (inputText.Contains("%"))
+                        {
+                            inputText = inputText.Remove(inputText.IndexOf('%'), 1);
+                        }
+
+                        if (!decimal.TryParse(inputText, NumberStyles.Any, _currentCulture, out decimal result))
+                        {
                             isPastedTextValid = false;
                         }
-                        else if (tmp < Minimum)
+                        else
                         {
-                            txtBox.Text = Minimum.ToString();
-                            txtBox.SelectionStart = str.Length + 1;
-                            txtBox.SelectionLength = 0;
-                            isPastedTextValid = false;
+                            var tmp = Convert.ToDecimal(inputText, CultureInfo.InvariantCulture);
+                            if (tmp > Maximum)
+                            {
+                                txtBox.Text = Maximum.ToString();
+                                txtBox.SelectionStart = inputText.Length + 1;
+                                txtBox.SelectionLength = 0;
+                                isPastedTextValid = false;
+                            }
+                            else if (tmp < Minimum)
+                            {
+                                txtBox.Text = Minimum.ToString();
+                                txtBox.SelectionStart = inputText.Length + 1;
+                                txtBox.SelectionLength = 0;
+                                isPastedTextValid = false;
+                            }
                         }
                     }
                 }
@@ -264,7 +289,7 @@ namespace NumericUpDownPoC
         }
 
         private void TxtBox_PreviewKeyDown(object sender, KeyEventArgs e)
-       {
+        {
             if (e.Key == Key.Space || e.Key == Key.OemPlus)
             {
                 e.Handled = true;
@@ -309,7 +334,7 @@ namespace NumericUpDownPoC
             if (txtBox != null)
             {
                 var caretIndex = txtBox.CaretIndex;
-                var str = txtBox.Text + e.Text;
+                var str = txtBox.Text.Insert(caretIndex, e.Text);
                 bool percentMode = false;
 
                 // check if user has entered anything after 
@@ -450,9 +475,9 @@ namespace NumericUpDownPoC
                 {
                     if (IsDotCurrentCulture() && e.Text == Comma)
                     {
-                        if (txtBox.Text.Contains(Comma))
+                        if (str.Contains(Comma))
                         {
-                            txtBox.Text = txtBox.Text.Replace(Comma, Dot);
+                            txtBox.Text = str.Replace(Comma, Dot);
                             txtBox.CaretIndex = txtBox.Text.Length;
                             e.Handled = true;
                             return;
@@ -467,9 +492,9 @@ namespace NumericUpDownPoC
                     }
                     else if (!IsDotCurrentCulture() && e.Text == Dot)
                     {
-                        if (txtBox.Text.Contains(Dot))
+                        if (str.Contains(Dot))
                         {
-                            txtBox.Text = txtBox.Text.Replace(Dot, Comma);
+                            txtBox.Text = str.Replace(Dot, Comma);
                             txtBox.CaretIndex = txtBox.Text.Length;
                             e.Handled = true;
                             return;
@@ -536,16 +561,6 @@ namespace NumericUpDownPoC
                     e.Handled = true;
                 }
 
-                // check for precision correctness,
-                // and forbid adding more digits
-                // then precision cap.
-                if (!IsValidWithPrecision(str))
-                {
-                    txtBox.Text = RemoveLast(str);
-                    e.Handled = true;
-                    return;
-                }
-
                 // check if minus is on first position
                 // if it's not, then insert it to the front.
                 if (str.Length > 1 && str[0] == '-')
@@ -580,8 +595,19 @@ namespace NumericUpDownPoC
                 // then move it to the first position.
                 if (str.Contains(Minus) && str.IndexOf('-') != 0)
                 {
-                    txtBox.Text = MoveCharToFirst(str, Minus);
+                    str = MoveCharToFirst(str, Minus);
+                    txtBox.Text = str;
                     e.Handled = true;
+                }
+
+                // check for precision correctness,
+                // and forbid adding more digits
+                // then precision cap.
+                if (!IsValidWithPrecision(str))
+                {
+                    txtBox.Text = RemoveLast(str);
+                    e.Handled = true;
+                    return;
                 }
             }
         }
@@ -852,6 +878,11 @@ namespace NumericUpDownPoC
             return Regex.IsMatch(text, @"^[0-9]+(\.\,[0-9]{1,2})?$");
         }
 
+        private bool IsNumericWithDot(string text)
+        {
+            return Regex.IsMatch(text, @"^[0-9]+(\.[0-9]{1,2})?$");
+        }
+
         private bool IsValid(string text)
         {
             return Regex.IsMatch(text, @"[^0-9.,-]+");
@@ -1033,14 +1064,32 @@ namespace NumericUpDownPoC
     [ValueConversion(typeof(decimal), typeof(string))]
     public class DecimalPointConverter : IValueConverter
     {
+        private char _currentCultureSeparator;
+        private CultureInfo _currentCulture;
+
+        public DecimalPointConverter()
+        {
+            SetupInvariantCulture();
+        }
+
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             var retValue = value.ToString();
             if (!string.IsNullOrEmpty(retValue))
             {
-                if (retValue.Contains("."))
+                if (_currentCultureSeparator == ',')
                 {
-                    return ((decimal)value).ToString().Replace(".", ",");
+                    if (retValue.Contains("."))
+                    {
+                        return ((decimal)value).ToString().Replace(".", ",");
+                    }
+                }
+                else if (_currentCultureSeparator == '.')
+                {
+                    if (retValue.Contains(","))
+                    {
+                        return ((decimal)value).ToString().Replace(",", ".");
+                    }
                 }
             }
             return ((decimal)value).ToString();
@@ -1051,12 +1100,35 @@ namespace NumericUpDownPoC
             var retValue = value.ToString();
             if (!string.IsNullOrEmpty(retValue))
             {
-                if (retValue.Contains(","))
+                if (_currentCultureSeparator == ',')
                 {
-                    return retValue.Replace(",", ".");
+                    if (retValue.Contains("."))
+                    {
+                        return retValue.Replace(".", ",");
+                    }
+                }
+                else if (_currentCultureSeparator == '.')
+                {
+                    if (retValue.Contains(","))
+                    {
+                        return retValue.Replace(",", ".");
+                    }
                 }
             }
             return value;
+        }
+
+        private void SetupInvariantCulture()
+        {
+            try
+            {
+                _currentCultureSeparator = System.Convert.ToChar(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
+                _currentCulture = CultureInfo.CurrentCulture;
+            } 
+            catch (Exception)
+            {
+                throw;
+            }
         }
     }
     #endregion
