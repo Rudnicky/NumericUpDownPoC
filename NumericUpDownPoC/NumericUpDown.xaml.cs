@@ -212,6 +212,10 @@ namespace NumericUpDownPoC
                                 txtBox.SelectionLength = 0;
                                 isPastedTextValid = false;
                             }
+                            else if (!IsValidWithPrecision(inputText))
+                            {
+                                isPastedTextValid = false;
+                            }
                         }
                     }
                 }
@@ -633,7 +637,7 @@ namespace NumericUpDownPoC
                             str = str.Replace(Comma, Dot);
                         }
 
-                        if (str.Length >= 1 && (!str.Contains(Dot) && str.IndexOf('.') != str.Length - 1))
+                        if (str.Length >= 1 && str.IndexOf('.') != str.Length - 1)
                         {
                             if (!(str.Length == 1 && str[0] == '-'))
                             {
@@ -1041,7 +1045,11 @@ namespace NumericUpDownPoC
                     }
                 }
 
-                if (retValue.Length > 1 && retValue[0] == '-' && retValue[1] == '1')
+                if (retValue == "-1")
+                {
+                    return "N/A";
+                }
+                else if (retValue == "-1.0")
                 {
                     return "N/A";
                 }
