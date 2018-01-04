@@ -19,7 +19,6 @@
             Grid.Row="0"
             Width="200"
             Height="50"
-            DefaultValue="6"
             Maximum="100"
             Minimum="-100"
             Precision="2"
@@ -42,7 +41,7 @@
             IsNumericUpDownNA="True"
             Maximum="10"
             Minimum="-10"
-            Precision="4"
+            Precision="2"
             StepValue="1" />
     </Grid>
 </Window>

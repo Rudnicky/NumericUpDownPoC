@@ -98,7 +98,7 @@ namespace NumericUpDownPoC
             DependencyProperty.Register("DefaultValue",
                 typeof(decimal),
                 typeof(NumericUpDown),
-                new PropertyMetadata((decimal)1));
+                new PropertyMetadata((decimal)0));
 
         public int Precision
         {
@@ -182,7 +182,7 @@ namespace NumericUpDownPoC
                         // TryParse functionality method
                         if (_currentCultureSeparator == ',')
                         {
-                            inputText = inputText.Replace(".", ",");
+                            inputText = inputText.Replace(Dot, Comma);
                         }
 
                         if (!decimal.TryParse(inputText, NumberStyles.Any, _currentCulture, out decimal result))
@@ -350,23 +350,24 @@ namespace NumericUpDownPoC
                 var str = txtBox.Text.Insert(caretIndex, e.Text);
                 bool percentMode = false;
 
+                var selectionStart = txtBox.SelectionStart;
+                var selectionLength = txtBox.SelectionLength;
+
+                if (selectionLength > 0)
+                {
+                    str = txtBox.Text.Remove(selectionStart, selectionLength) + str;
+                }
+
+                // check if input contains any of the
+                // N/A characters and remove it if any.
+                str = RemoveNA(str);
+
                 // check if user has entered anything after 
                 // percent, is yes then remove percent char.
                 if (str.Contains("%") && str.IndexOf('%') != str.Length - 1)
                 {
                     str = RemoveBySign(str, '%');
                     percentMode = true;
-                }
-
-                // check for NOR numbers.
-                if (IsNumericUpDownNA)
-                {
-                    if (!IsNumeric(str))
-                    {
-                        this.Value = 0;
-                        e.Handled = true;
-                        return;
-                    }
                 }
 
                 if (IsValid(e.Text))
@@ -579,27 +580,7 @@ namespace NumericUpDownPoC
                 if (str.Length > 1 && str[0] == '-')
                 {
                     txtBox.Text = str;
-
-                    // check for special condition when
-                    // user has entered '0' and then minus
-                    // if precision is greater then one, user should
-                    // be able to enter '-0' yet there's no such value
-                    // in math, so what we do i that we're about to
-                    // add a separator just after '-0' value to let user
-                    // enter after decimal point like '-0.X'
-                    if (Precision >= 1)
-                    {
-                        if (str.Length == 2)
-                        {
-                            if (str[0] == '-' && str[1] == '0')
-                            {
-                                txtBox.Text = str + _currentCultureSeparator; // separator
-                                txtBox.CaretIndex = txtBox.Text.Length;
-                                e.Handled = true;
-                                return;
-                            }
-                        }
-                    }
+                    txtBox.CaretIndex = txtBox.Text.Length;
                     e.Handled = true;
                 }
 
@@ -629,7 +610,7 @@ namespace NumericUpDownPoC
         {
             try
             {
-                var str = txtBox.Text;
+                var str = RemoveNA(txtBox.Text);
                 if (!string.IsNullOrEmpty(str))
                 {
                     if (str[0] == ',' || str[0] == '.')
@@ -652,26 +633,29 @@ namespace NumericUpDownPoC
                             str = str.Replace(Comma, Dot);
                         }
 
-                        if (str.Length > 1 && str.IndexOf('.') != str.Length - 1)
+                        if (str.Length >= 1 && (!str.Contains(Dot) && str.IndexOf('.') != str.Length - 1))
                         {
-                            var tmp = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
-                            if (tmp > Maximum)
+                            if (!(str.Length == 1 && str[0] == '-'))
                             {
-                                txtBox.Text = Maximum.ToString();
-                                txtBox.SelectionStart = str.Length + 1;
-                                txtBox.SelectionLength = 0;
-                                Value = Maximum;
-                            }
-                            else if (tmp < Minimum)
-                            {
-                                txtBox.Text = Minimum.ToString();
-                                txtBox.SelectionStart = str.Length + 1;
-                                txtBox.SelectionLength = 0;
-                                Value = Minimum;
-                            }
-                            else
-                            {
-                                Value = tmp;
+                                var tmp = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
+                                if (tmp > Maximum)
+                                {
+                                    txtBox.Text = Maximum.ToString();
+                                    txtBox.SelectionStart = str.Length + 1;
+                                    txtBox.SelectionLength = 0;
+                                    Value = Maximum;
+                                }
+                                else if (tmp < Minimum)
+                                {
+                                    txtBox.Text = Minimum.ToString();
+                                    txtBox.SelectionStart = str.Length + 1;
+                                    txtBox.SelectionLength = 0;
+                                    Value = Minimum;
+                                }
+                                else
+                                {
+                                    Value = tmp;
+                                }
                             }
                         }
                     }
@@ -887,7 +871,6 @@ namespace NumericUpDownPoC
         {
             // valid = ["123.12", "2", "56754", "92929292929292.12", "0.21", "3.1"]
             // invalid = ["12.1232", "2.23332", "e666.76"]
-
             return Regex.IsMatch(text, @"^[0-9]+(\.\,[0-9]{1,2})?$");
         }
 
@@ -917,6 +900,26 @@ namespace NumericUpDownPoC
                 return true;
             }
             return false;
+        }
+
+        private string RemoveNA(string text)
+        {
+            var retValue = text;
+            if (retValue.Contains("N"))
+            {
+                retValue = retValue.Remove(retValue.IndexOf('N'), 1);
+            }
+
+            if (retValue.Contains("/"))
+            {
+                retValue = retValue.Remove(retValue.IndexOf('/'), 1);
+            }
+
+            if (retValue.Contains("A"))
+            {
+                retValue = retValue.Remove(retValue.IndexOf('A'), 1);
+            }
+            return retValue;
         }
 
         /// <summary>
@@ -956,8 +959,7 @@ namespace NumericUpDownPoC
                         Source = this,
                         Path = new PropertyPath("Value"),
                         Mode = BindingMode.TwoWay,
-                        Converter = converter,
-                        UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+                        Converter = converter
                     };
                     BindingOperations.SetBinding(txtBox, TextBox.TextProperty, binding);
                 }
@@ -987,8 +989,7 @@ namespace NumericUpDownPoC
                         Source = this,
                         Path = new PropertyPath("Value"),
                         Mode = BindingMode.TwoWay,
-                        Converter = converter,
-                        UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+                        Converter = converter
                     };
                     BindingOperations.SetBinding(txtBox, TextBox.TextProperty, binding);
                 }
@@ -1013,21 +1014,39 @@ namespace NumericUpDownPoC
     [ValueConversion(typeof(decimal), typeof(string))]
     public class NotAvailableConverter : IValueConverter
     {
+        private char _currentCultureSeparator;
+        private CultureInfo _currentCulture;
+
+        public NotAvailableConverter()
+        {
+            SetupInvariantCulture();
+        }
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             var retValue = value.ToString();
             if (!string.IsNullOrEmpty(retValue))
             {
-                if (retValue.Equals("-1"))
+                if (_currentCultureSeparator == ',')
                 {
-                    return retValue.Replace("-1", "N/A");
+                    if (retValue.Contains("."))
+                    {
+                        retValue = ((decimal)value).ToString().Replace(".", ",");
+                    }
                 }
-                else
+                else if (_currentCultureSeparator == '.')
                 {
-                    return decimal.Parse(retValue);
+                    if (retValue.Contains(","))
+                    {
+                        retValue = ((decimal)value).ToString().Replace(",", ".");
+                    }
+                }
+
+                if (retValue.Length > 1 && retValue[0] == '-' && retValue[1] == '1')
+                {
+                    return "N/A";
                 }
             }
-            return decimal.Parse(value.ToString());
+            return ((decimal)value).ToString();
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -1035,6 +1054,21 @@ namespace NumericUpDownPoC
             var retValue = value.ToString();
             if (!string.IsNullOrEmpty(retValue))
             {
+                if (_currentCultureSeparator == ',')
+                {
+                    if (retValue.Contains("."))
+                    {
+                        retValue.Replace(".", ",");
+                    }
+                }
+                else if (_currentCultureSeparator == '.')
+                {
+                    if (retValue.Contains(","))
+                    {
+                        retValue.Replace(",", ".");
+                    }
+                }
+
                 Regex regex = new Regex(@"[^0-9.,-]+");
                 retValue = regex.Replace(retValue, string.Empty);
                 if (retValue == "-")
@@ -1043,7 +1077,20 @@ namespace NumericUpDownPoC
                 }
                 return retValue;
             }
-            return value.ToString();
+            return value;
+        }
+
+        private void SetupInvariantCulture()
+        {
+            try
+            {
+                _currentCultureSeparator = System.Convert.ToChar(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
+                _currentCulture = CultureInfo.CurrentCulture;
+            }
+            catch (Exception)
+            {
+                throw;
+            }
         }
     }
 
