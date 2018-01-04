@@ -137,7 +137,7 @@ namespace NumericUpDownPoC
         #region Constructor
         public NumericUpDown()
         {
-            //ChangeCurrentCulture("pl-PL");
+            // ChangeCurrentCulture("pl-PL");
             InitializeComponent();
             SetupInvariantCulture();
 
@@ -167,7 +167,7 @@ namespace NumericUpDownPoC
                         var inputText = pasteText;
                         var selectionStart = txtBox.SelectionStart;
                         var selectionLength = txtBox.SelectionLength;
-                        
+
                         if (!string.IsNullOrEmpty(txtBox.Text))
                         {
                             inputText = txtBox.Text.Remove(selectionStart, selectionLength) + pasteText;
@@ -185,7 +185,8 @@ namespace NumericUpDownPoC
                             inputText = inputText.Replace(Dot, Comma);
                         }
 
-                        if (!decimal.TryParse(inputText, NumberStyles.Any, _currentCulture, out decimal result))
+                        decimal result;
+                        if (!decimal.TryParse(inputText, NumberStyles.Any, _currentCulture, out result))
                         {
                             isPastedTextValid = false;
                         }
@@ -203,6 +204,7 @@ namespace NumericUpDownPoC
                                 txtBox.Text = Maximum.ToString();
                                 txtBox.SelectionStart = inputText.Length + 1;
                                 txtBox.SelectionLength = 0;
+                                Value = Maximum;
                                 isPastedTextValid = false;
                             }
                             else if (tmp < Minimum)
@@ -210,15 +212,24 @@ namespace NumericUpDownPoC
                                 txtBox.Text = Minimum.ToString();
                                 txtBox.SelectionStart = inputText.Length + 1;
                                 txtBox.SelectionLength = 0;
+                                Value = Minimum;
                                 isPastedTextValid = false;
                             }
                             else if (!IsValidWithPrecision(inputText))
                             {
                                 isPastedTextValid = false;
                             }
+                            else
+                            {
+                                txtBox.Text = tmp.ToString();
+                                Value = tmp;
+                                isPastedTextValid = false;
+                            }
                         }
                     }
                 }
+
+                txtBox.GetBindingExpression(TextBox.TextProperty).UpdateTarget();
 
                 if (!isPastedTextValid)
                     e.CancelCommand();
@@ -249,7 +260,8 @@ namespace NumericUpDownPoC
                     {
                         if (!IsPercentageModeOn)
                         {
-                            if (!Decimal.TryParse(str, NumberStyles.Any, _currentCulture, out Decimal value))
+                            decimal value;
+                            if (!decimal.TryParse(str, NumberStyles.Any, _currentCulture, out value))
                             {
                                 this.Value = 0;
                             }
@@ -336,18 +348,36 @@ namespace NumericUpDownPoC
                 try
                 {
                     this.Value -= StepValue;
-                    txtBox.Text = Value.ToString();
                 }
                 catch (Exception)
                 {
                     throw;
                 }
             }
+
+            if (e.Key == Key.OemMinus && Minimum >= 0)
+            {
+                e.Handled = true;
+            }
+
+            if (e.Key == Key.Back || e.Key == Key.Delete)
+            {
+                var str = txtBox.Text;
+
+                // check if user has tried to delete after % sign.
+                // If yes, then it's not allowed. Checking's based on
+                // Current caret index. If it's not equal to Length
+                // of a txtbox text then allow removing.
+                if (IsPercentageModeOn && str.IndexOf('%') == str.Length - 1 && txtBox.CaretIndex == txtBox.Text.Length)
+                {
+                    e.Handled = true;
+                }
+            }
         }
 
         private void TxtBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {
-            var txtBox = (TextBox)sender;       
+            var txtBox = (TextBox)sender;
             if (txtBox != null)
             {
                 var caretIndex = txtBox.CaretIndex;
@@ -367,10 +397,10 @@ namespace NumericUpDownPoC
                 str = RemoveNA(str);
 
                 // check if user has entered anything after 
-                // percent, is yes then remove percent char.
+                // percent, if yes then remove last char.
                 if (str.Contains("%") && str.IndexOf('%') != str.Length - 1)
                 {
-                    str = RemoveBySign(str, '%');
+                    str = RemoveLast(str);
                     percentMode = true;
                 }
 
@@ -467,6 +497,7 @@ namespace NumericUpDownPoC
                         txtBox.SelectionStart = str.Length + 1;
                         txtBox.SelectionLength = 0;
                         Value = Maximum;
+                        txtBox.GetBindingExpression(TextBox.TextProperty).UpdateTarget();
                         return;
                     }
                     else if (tmp < Minimum)
@@ -475,13 +506,15 @@ namespace NumericUpDownPoC
                         txtBox.SelectionStart = str.Length + 1;
                         txtBox.SelectionLength = 0;
                         Value = Minimum;
+                        txtBox.GetBindingExpression(TextBox.TextProperty).UpdateTarget();
                         return;
                     }
                     else
                     {
                         Value = tmp;
+                        txtBox.GetBindingExpression(TextBox.TextProperty).UpdateTarget();
                     }
-                    
+
                     percentMode = false;
                     e.Handled = true;
                 }
@@ -542,7 +575,7 @@ namespace NumericUpDownPoC
                         txtBox.CaretIndex = txtBox.Text.Length;
                         e.Handled = true;
                     }
-                    
+
                     if (str[1] == '0' && Precision < 1)
                     {
                         txtBox.Text = RemoveLast(str);
@@ -660,6 +693,8 @@ namespace NumericUpDownPoC
                                 {
                                     Value = tmp;
                                 }
+
+                                txtBox.GetBindingExpression(TextBox.TextProperty).UpdateTarget();
                             }
                         }
                     }
@@ -943,7 +978,8 @@ namespace NumericUpDownPoC
         #region DependencyProperty Callbacks
         private static void NumericUpDownNAChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (d is NumericUpDown numericUpDown)
+            var numericUpDown = d as NumericUpDown;
+            if (numericUpDown != null)
             {
                 numericUpDown.OnNumericUpDownNAChanged(e);
             }
@@ -973,7 +1009,8 @@ namespace NumericUpDownPoC
 
         private static void NumericUpDownPercentageChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (d is NumericUpDown numericUpDown)
+            var numericUpDown = d as NumericUpDown;
+            if (numericUpDown != null)
             {
                 numericUpDown.OnNumericUpDownPercentageChanged(e);
             }
@@ -1190,7 +1227,7 @@ namespace NumericUpDownPoC
             {
                 _currentCultureSeparator = System.Convert.ToChar(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
                 _currentCulture = CultureInfo.CurrentCulture;
-            } 
+            }
             catch (Exception)
             {
                 throw;

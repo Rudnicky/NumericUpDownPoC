@@ -30,7 +30,7 @@
             DefaultValue="6"
             IsPercentageModeOn="True"
             Maximum="10"
-            Minimum="-10"
+            Minimum="0"
             Precision="2"
             StepValue="1" />
         <local:NumericUpDown
