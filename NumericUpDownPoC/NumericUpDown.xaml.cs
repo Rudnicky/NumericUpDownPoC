@@ -359,7 +359,7 @@ namespace NumericUpDownPoC
 
                 if (selectionLength > 0)
                 {
-                    str = txtBox.Text.Remove(selectionStart, selectionLength) + str;
+                    str = txtBox.Text.Remove(selectionStart, selectionLength) + e.Text;
                 }
 
                 // check if input contains any of the
@@ -668,12 +668,10 @@ namespace NumericUpDownPoC
             catch (OverflowException)
             {
                 // The conversion from string to decimal overflowed.
-                throw;
             }
             catch (FormatException)
             {
                 // The string is not formatted as a decimal.
-                throw;
             }
         }
 
