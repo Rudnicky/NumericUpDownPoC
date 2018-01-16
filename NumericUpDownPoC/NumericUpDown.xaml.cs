@@ -35,21 +35,8 @@ namespace NumericUpDownPoC
             }
             set
             {
-                if (value <= Maximum && value >= Minimum)
-                {
-                    SetValue(ValueProperty, value);
-                    OnPropertyChanged("Value");
-                }
-                else if (value > Maximum)
-                {
-                    SetValue(ValueProperty, Maximum);
-                    OnPropertyChanged("Value");
-                }
-                else if (value < Minimum)
-                {
-                    SetValue(ValueProperty, Minimum);
-                    OnPropertyChanged("Value");
-                }
+                SetValue(ValueProperty, value);
+                OnPropertyChanged("Value");
             }
         }
         public static readonly DependencyProperty ValueProperty =
@@ -137,7 +124,6 @@ namespace NumericUpDownPoC
         #region Constructor
         public NumericUpDown()
         {
-            // ChangeCurrentCulture("pl-PL");
             InitializeComponent();
             SetupInvariantCulture();
 
@@ -165,12 +151,14 @@ namespace NumericUpDownPoC
                         isPastedTextValid = true;
 
                         var inputText = pasteText;
+                        var inputLength = pasteText.Length;
                         var selectionStart = txtBox.SelectionStart;
                         var selectionLength = txtBox.SelectionLength;
 
                         if (!string.IsNullOrEmpty(txtBox.Text))
                         {
-                            inputText = txtBox.Text.Remove(selectionStart, selectionLength) + pasteText;
+                            inputText = txtBox.Text.Remove(selectionStart, selectionLength);
+                            inputText = inputText.Insert(selectionStart, pasteText);
                         }
 
                         if (inputText.Contains("%"))
@@ -199,29 +187,14 @@ namespace NumericUpDownPoC
                                 inputText = inputText.Replace(Comma, Dot);
                             }
                             var tmp = Convert.ToDecimal(inputText, CultureInfo.InvariantCulture);
-                            if (tmp > Maximum)
-                            {
-                                txtBox.Text = Maximum.ToString();
-                                txtBox.SelectionStart = inputText.Length + 1;
-                                txtBox.SelectionLength = 0;
-                                Value = Maximum;
-                                isPastedTextValid = false;
-                            }
-                            else if (tmp < Minimum)
-                            {
-                                txtBox.Text = Minimum.ToString();
-                                txtBox.SelectionStart = inputText.Length + 1;
-                                txtBox.SelectionLength = 0;
-                                Value = Minimum;
-                                isPastedTextValid = false;
-                            }
-                            else if (!IsValidWithPrecision(inputText))
+                            if (!IsValidWithPrecision(inputText))
                             {
                                 isPastedTextValid = false;
                             }
                             else
                             {
                                 txtBox.Text = tmp.ToString();
+                                txtBox.CaretIndex = selectionStart + inputLength;
                                 Value = tmp;
                                 isPastedTextValid = false;
                             }
@@ -255,35 +228,24 @@ namespace NumericUpDownPoC
                     if (string.IsNullOrEmpty(str))
                     {
                         this.Value = 0;
+                        txtBox.GetBindingExpression(TextBox.TextProperty).UpdateTarget();
                     }
                     else
                     {
-                        if (!IsPercentageModeOn)
+                        if (str.Equals("N/A"))
+                            return;
+
+                        if (str.Contains("%"))
+                            str.Remove(str.IndexOf('%'), 1);
+
+                        decimal value;
+                        if (!decimal.TryParse(str, NumberStyles.Any, _currentCulture, out value))
                         {
-                            decimal value;
-                            if (!decimal.TryParse(str, NumberStyles.Any, _currentCulture, out value))
-                            {
-                                this.Value = 0;
-                            }
-                            else if (str.Length > 1)
-                            {
-                                if (str.Contains(",") && str.IndexOf(',') == str.Length - 1)
-                                {
-                                    this.Value = Decimal.Parse(RemoveLast(str));
-                                }
-                                else if (str.Contains(".") && str.IndexOf('.') == str.Length - 1)
-                                {
-                                    this.Value = Decimal.Parse(RemoveLast(str));
-                                }
-                                else if (str.Length == 2 && str[0] == '-' && str[1] == '0')
-                                {
-                                    this.Value = 0;
-                                }
-                                else if (str.Contains(","))
-                                {
-                                    this.Value = Convert.ToDecimal(str.Replace(Comma, Dot), CultureInfo.InvariantCulture);
-                                }
-                            }
+                            SetupDefaultValue();
+                        }
+                        else
+                        {
+                            ValidateLostFocusValue(str);
                         }
                     }
                 }
@@ -304,11 +266,11 @@ namespace NumericUpDownPoC
             {
                 if (e.Delta > 0)
                 {
-                    Value += StepValue;
+                    IncreaseStepValue();
                 }
                 else if (e.Delta < 0)
                 {
-                    Value -= StepValue;
+                    DecreaseStepValue();
                 }
             }
             catch (Exception)
@@ -336,7 +298,7 @@ namespace NumericUpDownPoC
             {
                 try
                 {
-                    this.Value += StepValue;
+                    IncreaseStepValue();
                 }
                 catch (Exception)
                 {
@@ -347,7 +309,7 @@ namespace NumericUpDownPoC
             {
                 try
                 {
-                    this.Value -= StepValue;
+                    DecreaseStepValue();
                 }
                 catch (Exception)
                 {
@@ -380,17 +342,18 @@ namespace NumericUpDownPoC
             var txtBox = (TextBox)sender;
             if (txtBox != null)
             {
-                var caretIndex = txtBox.CaretIndex;
-                var str = txtBox.Text.Insert(caretIndex, e.Text);
                 bool percentMode = false;
 
-                var selectionStart = txtBox.SelectionStart;
-                var selectionLength = txtBox.SelectionLength;
+                // getting new text input argument 
+                // and adding it to the current txtbox text
+                // property depending on caret index.
+                var caretIndex = txtBox.CaretIndex;
+                var str = txtBox.Text.Insert(caretIndex, e.Text);
 
-                if (selectionLength > 0)
-                {
-                    str = txtBox.Text.Remove(selectionStart, selectionLength) + e.Text;
-                }
+                // check if text input argument is entered
+                // on already mouse selected piece of text. If yes,
+                // then remove selected text and add new input.
+                str = ValidateMouseSelectedText(str, e.Text);
 
                 // check if input contains any of the
                 // N/A characters and remove it if any.
@@ -404,6 +367,9 @@ namespace NumericUpDownPoC
                     percentMode = true;
                 }
 
+                // simple regex to valid if entered text input
+                // is a number or not. Dots, Commas & Minuses
+                // are allowed in this particular regex.
                 if (IsValid(e.Text))
                 {
                     e.Handled = true;
@@ -429,14 +395,8 @@ namespace NumericUpDownPoC
                     }
                 }
 
-                // return if first char is dot or comma.
-                if (txtBox.Text == string.Empty && (e.Text == Comma || e.Text == Dot))
-                {
-                    txtBox.Text = string.Empty;
-                    e.Handled = true;
-                    return;
-                }
-
+                // check for minuses duplicates.
+                // and remove if necessary.
                 if (HasDuplicate(str, '-'))
                 {
                     if (str.Length != 2)
@@ -453,14 +413,27 @@ namespace NumericUpDownPoC
                     }
                 }
 
-                // check for possible duplicates.
+                // check for dot duplicates.
+                // and remove if necessary.
                 if (HasDuplicate(str, '.'))
                 {
-                    txtBox.Text = RemoveDuplicate(str, '.');
-                    e.Handled = true;
-                    return;
+
+                    if (str.Length != 2)
+                    {
+                        txtBox.Text = RemoveDuplicate(str, '.');
+                        e.Handled = true;
+                        return;
+                    }
+                    else
+                    {
+                        txtBox.Text = RemoveLast(str);
+                        e.Handled = true;
+                        return;
+                    }
                 }
 
+                // check for comma duplicates.
+                // and remove if necessary.
                 if (HasDuplicate(str, ','))
                 {
                     if (str[0] == ',')
@@ -477,44 +450,11 @@ namespace NumericUpDownPoC
                     }
                 }
 
-                // if minus is on first place move 
-                // carret at the right side of a sign.
-                if (str.Length >= 1 && str[0] == '-')
-                {
-                    txtBox.Text = str;
-                    txtBox.CaretIndex = str.Length;
-                    e.Handled = true;
-                }
-
                 // additional validation to prevent
                 // values like '-6%b' etc.
                 if (percentMode && str != Minus)
                 {
-                    var tmp = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
-                    if (tmp > Maximum)
-                    {
-                        txtBox.Text = Maximum.ToString();
-                        txtBox.SelectionStart = str.Length + 1;
-                        txtBox.SelectionLength = 0;
-                        Value = Maximum;
-                        txtBox.GetBindingExpression(TextBox.TextProperty).UpdateTarget();
-                        return;
-                    }
-                    else if (tmp < Minimum)
-                    {
-                        txtBox.Text = Minimum.ToString();
-                        txtBox.SelectionStart = str.Length + 1;
-                        txtBox.SelectionLength = 0;
-                        Value = Minimum;
-                        txtBox.GetBindingExpression(TextBox.TextProperty).UpdateTarget();
-                        return;
-                    }
-                    else
-                    {
-                        Value = tmp;
-                        txtBox.GetBindingExpression(TextBox.TextProperty).UpdateTarget();
-                    }
-
+                    Value = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
                     percentMode = false;
                     e.Handled = true;
                 }
@@ -582,6 +522,14 @@ namespace NumericUpDownPoC
                         e.Handled = true;
                         return;
                     }
+
+                    if (str[0] == ',' || str[0] == '.')
+                    {
+                        txtBox.Text = str.Insert(0, "0");
+                        txtBox.CaretIndex = txtBox.Text.Length;
+                        e.Handled = true;
+                        return;
+                    }
                 }
 
                 // prevent situation like letting user
@@ -612,27 +560,19 @@ namespace NumericUpDownPoC
                     e.Handled = true;
                 }
 
-                // check if minus is on first position
-                // if it's not, then insert it to the front.
-                if (str.Length > 1 && str[0] == '-')
-                {
-                    txtBox.Text = str;
-                    txtBox.CaretIndex = txtBox.Text.Length;
-                    e.Handled = true;
-                }
-
                 // check if minus is somewhere in
                 // the middle like "6-6" integer. If so
-                // then move it to the first position.
+                // then remove this particular minus.
                 if (str.Contains(Minus) && str.IndexOf('-') != 0)
                 {
-                    str = MoveCharToFirst(str, Minus);
+                    str = RemoveBySign(str, '-');
                     txtBox.Text = str;
+                    txtBox.CaretIndex = caretIndex;
                     e.Handled = true;
                 }
 
                 // check for precision correctness,
-                // and forbid adding more digits
+                // and forbbid adding more digits
                 // then precision cap.
                 if (!IsValidWithPrecision(str))
                 {
@@ -650,52 +590,24 @@ namespace NumericUpDownPoC
                 var str = RemoveNA(txtBox.Text);
                 if (!string.IsNullOrEmpty(str))
                 {
-                    if (str[0] == ',' || str[0] == '.')
+                    if (str.Contains("%") && str.Length > 0)
                     {
-                        txtBox.Text = str.Remove(0, 1) + str[0].ToString();
-                        txtBox.CaretIndex = str.Length;
-                        return;
+                        str = RemoveLast(str);
                     }
 
-                    if (!str.Equals("N/A"))
+                    if (str.Contains(Comma))
                     {
-                        if (str.Contains("%") && str.Length > 0)
-                        {
-                            str = RemoveLast(str);
-                        }
+                        str = str.Replace(Comma, Dot);
+                    }
 
-                        if (str.Contains(Comma))
+                    if (str.Length >= 1 && str.IndexOf('.') != str.Length - 1)
+                    {
+                        if (!(str.Length == 1 && str[0] == '-'))
                         {
-                            // in order to proper decimal conversion
-                            str = str.Replace(Comma, Dot);
-                        }
-
-                        if (str.Length >= 1 && str.IndexOf('.') != str.Length - 1)
-                        {
-                            if (!(str.Length == 1 && str[0] == '-'))
-                            {
-                                var tmp = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
-                                if (tmp > Maximum)
-                                {
-                                    txtBox.Text = Maximum.ToString();
-                                    txtBox.SelectionStart = str.Length + 1;
-                                    txtBox.SelectionLength = 0;
-                                    Value = Maximum;
-                                }
-                                else if (tmp < Minimum)
-                                {
-                                    txtBox.Text = Minimum.ToString();
-                                    txtBox.SelectionStart = str.Length + 1;
-                                    txtBox.SelectionLength = 0;
-                                    Value = Minimum;
-                                }
-                                else
-                                {
-                                    Value = tmp;
-                                }
-
-                                txtBox.GetBindingExpression(TextBox.TextProperty).UpdateTarget();
-                            }
+                            var tmp = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
+                            Value = tmp;
+                            txtBox.CaretIndex = str.Length;
+                            txtBox.GetBindingExpression(TextBox.TextProperty).UpdateTarget();
                         }
                     }
                 }
@@ -714,7 +626,7 @@ namespace NumericUpDownPoC
         {
             try
             {
-                this.Value += StepValue;
+                IncreaseStepValue();
             }
             catch (Exception)
             {
@@ -726,7 +638,7 @@ namespace NumericUpDownPoC
         {
             try
             {
-                this.Value -= StepValue;
+                DecreaseStepValue();
             }
             catch (Exception)
             {
@@ -746,6 +658,7 @@ namespace NumericUpDownPoC
             try
             {
                 this.Value = this.DefaultValue;
+                txtBox.GetBindingExpression(TextBox.TextProperty).UpdateTarget();
             }
             catch (Exception)
             {
@@ -780,6 +693,106 @@ namespace NumericUpDownPoC
                 }
             }
             return false;
+        }
+
+        private void CheckMinimumMaximumCap(string str)
+        {
+            try
+            {
+                var tmp = Convert.ToDecimal(str, CultureInfo.InvariantCulture);
+                if (tmp > Maximum)
+                {
+                    txtBox.Text = Maximum.ToString();
+                    txtBox.SelectionStart = str.Length + 1;
+                    txtBox.SelectionLength = 0;
+                    Value = Maximum;
+                }
+                else if (tmp < Minimum)
+                {
+                    txtBox.Text = Minimum.ToString();
+                    txtBox.SelectionStart = str.Length + 1;
+                    txtBox.SelectionLength = 0;
+                    Value = Minimum;
+                }
+                else
+                {
+                    Value = tmp;
+                }
+            }
+            catch (FormatException)
+            {
+                this.Value = this.DefaultValue;
+            }
+            catch (OverflowException)
+            {
+                this.Value = this.DefaultValue;
+            }
+            catch (Exception)
+            {
+                this.Value = this.DefaultValue;
+            }
+        }
+
+        private void ValidateLostFocusValue(string str)
+        {
+            if (str.Contains(",") && str.IndexOf(',') == str.Length - 1)
+            {
+                this.Value = Decimal.Parse(RemoveLast(str));
+            }
+            else if (str.Contains(".") && str.IndexOf('.') == str.Length - 1)
+            {
+                this.Value = Decimal.Parse(RemoveLast(str));
+            }
+            else if (str.Length == 2 && str[0] == '-' && str[1] == '0')
+            {
+                this.Value = this.DefaultValue;
+            }
+            else if (str.Contains(","))
+            {
+                this.Value = Convert.ToDecimal(str.Replace(Comma, Dot), CultureInfo.InvariantCulture);
+            }
+
+            CheckMinimumMaximumCap(str);
+        }
+
+        private void IncreaseStepValue()
+        {
+            var tmp = Value;
+            if (tmp >= Maximum)
+            {
+                this.Value = Maximum;
+            }
+            else
+            {
+                this.Value += StepValue;
+            }
+        }
+
+        private void DecreaseStepValue()
+        {
+            var tmp = Value;
+            if (tmp <= Minimum)
+            {
+                this.Value = Minimum;
+            }
+            else
+            {
+                this.Value -= StepValue;
+            }
+        }
+
+        private string ValidateMouseSelectedText(string str, string arg)
+        {
+            var selectionStart = txtBox.SelectionStart;
+            var selectionLength = txtBox.SelectionLength;
+
+            if (selectionLength > 0)
+            {
+                str = txtBox.Text.Remove(selectionStart, selectionLength);
+                return str.Insert(selectionStart, arg);
+            }
+
+            return str;
         }
 
         private string MoveCharToFirst(string text, string sign)
